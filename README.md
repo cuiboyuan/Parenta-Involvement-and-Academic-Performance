@@ -1,13 +1,13 @@
 # Whether Maternal and Paternal Involvement Have Different Effects on Student’s Academic Performance
 
-## Introduction
+## Abstract
 
 This report conducts a propensity score matching (PSM) analysis to explore whether mother’s involvement
 and father’s involvement have different effects on the student’s academic performance. It makes use of an
 observational dataset offered by the University of Jordan. Two models are constructed in this paper: a
 logistic model that estimates the propensity score with gender, grade, and place of birth as the baseline
 characteristics and a linear model that takes both the student’s engagement and parent’s involvements into
-account to assess the total marks of the student.
+account to assess the total marks of the student. Together with these models and the PSM technique, the paper has discovered that the mother's involvement is more likely to help students obtain better academic achievements than the father's involvement, with a p-value of 0.0000828
 
 __Keywords__: Parental Involvement, Academic Performance, Observational Study, Propensity Score Matching, Linear Model, Logistic Model
 
