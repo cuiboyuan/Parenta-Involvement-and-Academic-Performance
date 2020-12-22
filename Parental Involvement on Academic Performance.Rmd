@@ -1,0 +1,342 @@
+---
+title: "Whether Maternal and Paternal Involvement Have Different Effects on Student's Academic Performance"
+author: "Boyuan Cui"
+date: "December 22, 2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+# Abstract
+
+This report conducts a propensity score matching (PSM) analysis to explore whether mother's involvement and father's involvement have different effects on the student's academic performance. It makes use of an observational dataset offered by the University of Jordan. Two models are constructed in this paper: a logistic model that estimates the propensity score with gender, grade, and place of birth as the baseline characteristics and a linear model that takes both the student's engagement and parent's involvements into account to assess the total marks of the student. Together with these models and the PSM technique, the paper has discovered that the mother's involvement is more likely to help students obtain better academic achievements than the father's involvement, with a p-value of 0.0000828
+
+Github link: https://github.com/cuiboyuan/Parental-Involvement-and-Academic-Performance
+
+
+
+__Keywords__: Parental Involvement, Academic Performance, Observational Study, Propensity Score Matching
+
+# Introduction
+
+Parental involvement has always played a critical role in student's education, and schools have been encouraged in many ways to increase parental involvements __[5]__. Extensive researches have been conducted to investigate the effect of parental behaviors on student's school performance, but there has been only a handful of papers interested in the difference between the effect of maternal and paternal involvements on the student's academic achievements. One of the important reasons is that the effect of parental involvement is usually subtle, and it is hard to measure without a long period of time. Randomized experiments that take years are extremely expensive to organize. It is also unethical to interfere with the development of children by asking one of the parents to not involve in their education. Often, only observational data are available for this kind of research. Fortunately, there exist methods that can build causal links through observational studies, and propensity score matching (PSM) is one of those methods. In this report, the author will take advantage of PSM to explore whether there exists a difference between the effect of mother's involvements and father's involvement on the academic performance of the student.
+
+This report will use a dataset on student's academic performance collected on the Kaggle website (www.kaggle.com). Details on how the dataset and PSM are used to explore the causal link between mother and father's involvement on student's total mark will be elaborated in the Methodology section. The result of the PSM analysis will be described in the Result section, and the causal inferences along with the conclusion will be presented in the Discussion section.
+
+
+# Methodology
+
+## Data
+
+The dataset is posted on the Kaggle website by professor Ibrahim Aljarah at the University of Jordan (https://www.kaggle.com/aljarah/xAPI-Edu-Data). It consists of 480 students and 16 features including demographic information (e.g. gender, nationality), academic backgrounds (e.g. grade level, total marks), and behavioral features (e.g. raised hands) __[1,2]__. 
+
+There are 305 male and 175 females students in the dataset coming from a variety of origins; there are 179 students from Kuwait, 172 from Jordan, 28 from Palestine, 22 from Iraq, 17 from Lebanon, 12 from Tunis, 11 from Saudi Arabia, 9 from Egypt, 7 from Syria, 6 from the USA, 6 from Iran, 6 from Lybia, 4 from Morocco, and 1 from Venezuela. The data is collected by a learning management system called Kalboard 360 through a learner activity tracker tool called experience API (xAPI) which monitors the learning progress and action of students __[1,2]__. 
+
+The analysis in this report will only include 9 features from the dataset. Table 1 is a preview of the selected data.
+
+```{r, include=FALSE}
+raw_data <- read_csv('xAPI-Edu-Data.csv')
+```
+
+
+```{r}
+raw_data <- raw_data %>% select(gender, PlaceofBirth, GradeID, Relation, raisedhands, VisITedResources, AnnouncementsView, Discussion, Class)
+
+head(raw_data) %>% kbl(booktabs = T, caption = 'Glimpse of Original Data') %>% 
+  kable_styling(latex_options= c("striped", "hold_position"), font_size = 8)
+```
+
+
+__gender__ is a binary variable that represents the student's gender; the value is either M (male) or F (female).
+
+__PlaceofBirth__ is the student's place of birth. All possible values are Kuwait, Lebanon, Egypt, SaudiArabia, USA, Jordan, Venezuela, Iran, Tunis, Morocco, Syria, Palestine, Iraq, and Lybia.
+
+__GradeID__ represents which grade the student belongs to. The variable ranges from G-01 to G-12, which indicates grade 1 to grade 12, respectively.
+
+__Relation__ indicates which parent is responsible for the student. The value is either Mum or Father.
+
+__raisedhands__ is a numeric variable ranging from 0-100 that represents how many times the student has raised his/her hand in the classroom.
+
+__VisITedResources__ is a numeric variable ranging from 0-100 that represents how many times the student visits the course content.
+
+__AnnouncementsView__ is a numeric variable ranging from 0-100 that represents how many times the student checks the new announcements.
+
+__Discussion__ is a numeric variable ranging from 0-100 that represents how many times the student participates in discussion groups.
+
+__Class__ is a categorical variable that indicates which total mark interval the student belongs to. The dataset classifies students into three total mark numerical intervals: L (0-69), M (70-89), and H (90-100).
+
+For the purpose of analysis, __GradeID__ variable will be transformed to numeric variable __Grade__ where integers 1-12 represent G-01 to G-12, respectively. __Class__ variable will be transformed into a numeric variable by using 1 to represent L, 2 to represent M, and 3 to represent H. All other variables will be kept in the original format. Table 2 is a glimpse of the modified dataset.
+
+```{r}
+clean_data <- raw_data
+clean_data$Class <- case_when(raw_data$Class == 'L'~1,
+                            raw_data$Class == 'M'~2,
+                            raw_data$Class == 'H'~3)
+clean_data$GradeID <- case_when(raw_data$GradeID == 'G-01'~1,
+                  raw_data$GradeID == 'G-02'~2,
+                  raw_data$GradeID == 'G-03'~3,
+                  raw_data$GradeID == 'G-04'~4,
+                  raw_data$GradeID == 'G-05'~5,
+                  raw_data$GradeID == 'G-06'~6,
+                  raw_data$GradeID == 'G-07'~7,
+                  raw_data$GradeID == 'G-08'~8,
+                  raw_data$GradeID == 'G-09'~9,
+                  raw_data$GradeID == 'G-10'~10,
+                  raw_data$GradeID == 'G-11'~11,
+                  raw_data$GradeID == 'G-12'~12)
+clean_data <- rename(clean_data, Grade=GradeID)
+
+head(clean_data) %>% kbl(booktabs = T, caption = 'Glimpse of Modified Data') %>% 
+  kable_styling(latex_options= c("striped", "hold_position"), font_size = 8)
+```
+
+
+The reason why these variables are selected will be explained in the Model subsection below.
+
+## Model
+
+Randomized controlled trials (RCT) have always been a gold standard in determining the causal relationship between the intervention and the outcome. RCT ensures that the control and the experiment group are similar by randomly assigning the treatment, so the effectiveness of treatment will not be influenced by confounding variables __[3]__. However, in the real world situation, organizing randomized experiments is often expensive, and sometimes impossible. The observational study is usually a more feasible solution, but it is not resistant to confounders. The observed population could be biased, so researchers cannot make causal inferences through observational data.
+
+That is when the propensity score matching (PSM) becomes useful. A propensity score is defined as the probability of being assigned the treatment conditional on the observed baseline characteristics __[4]__. By this definition, with the same propensity score, the treated subjects will have similar baseline characteristics to the untreated subjects. In the observational study, the true propensity score is unknown and a regression model fit is needed to estimate the propensity score based on the observed baseline characteristic of each student __[3]__. 
+
+For the topic of this report, the __Relation__ variable, i.e. which parent is responsible for the student, will be considered as the treatment, so the propensity score will be the probability that the student's mother/father is responsible for him/her. Because __Relation__ variable is binary, this paper will define the propensity score as the probability that a student's mother is responsible for him/her. Hence, untreated students are ones whose father is responsible for him/her, and treated students are ones whose mother is responsible.
+
+After the propensity score regression model is fitted, the propensity score matching will be performed. Based on the propensity score estimation, treated and untreated students who share similar propensity scores will be matched into matching sets. Because they have similar propensity scores, matched students will have common characteristics. Thus, the impact of confounding is reduced when the outcome (the total mark) is assessed, which helps to build the causal link between the treatment and the outcome __[3]__.
+
+To summarize, the first step of PSM is to fit a propensity score regression model with the observed characteristics of students; the second step is to match students into treated-untreated pairs based on similar propensity scores; the final step is to compare the outcomes (__Class__ variable) within the matched data to assess the effectiveness of the treatment (__Relation__ variable).
+
+```{r}
+clean_data$gender <- factor(clean_data$gender, levels = c("M","F"))
+clean_data$PlaceofBirth <- as.factor(clean_data$PlaceofBirth)
+clean_data$PlaceofBirth <- relevel(clean_data$PlaceofBirth, ref = 5)
+clean_data$Relation <- as.factor(clean_data$Relation)
+clean_data$Relation <- relevel(clean_data$Relation, ref = 1)
+```
+
+
+The analysis will start off with the assumption of the null hypothesis ($H_0$) that there is no difference between the mother's involvement and the father's involvement in the student's academic performance. The final goal of this report is to determine whether there exists evidence that can reject $H_0$.
+
+
+### i. Propensity Score Regression Model
+
+As mentioned previously, the probability that __Relation__ equals 'Mum' is defined as the propensity score. To fit this model, one would need to find variables that will explain why a student is more likely to have his/her mother as the responsible parents, i.e. the baseline characteristics.
+
+In some cultures, the mother might often be expected to take care of young kids, so the place of birth is a reasonable variable to consider. Similarly, in some societies, one might also expect elder male kids to be more independent of their mother's caring, so age and gender are important as well. The dataset does not contain the age information, but a student's grade can be used as a similar measurement. In conclusion, __Grade__, __gender__, and __PlaceofBirth__ will be used as the baseline characteristics.
+
+
+Since __Relation__ variable is binary, the analysis will use the logistic regression to estimate the propensity score. The model can be written as below:
+
+$$logit(p)=\log{\frac{p}{1-p}} = \beta_0 + \beta_{female}\cdot\mathbb{I}\{female\} + \beta_{BirthPlace}\cdot BirthPlace + \beta_{Grade}\cdot Grade$$
+
+or equivalently:
+
+$$p = \frac{\exp(\beta_0 + \beta_{female}\cdot\mathbb{I}\{female\} + \beta_{BirthPlace} + \beta_{Grade}\cdot Grade)}{1+\exp(\beta_0 + \beta_{female}\cdot\mathbb{I}\{female\} + \beta_{BirthPlace} + \beta_{Grade}\cdot Grade)}$$
+
+The propensity score is represented as $p$. $\beta_0$ is the intercept term of the logit function $logit(p)$ when all other variables are 0. In the context of this analysis, $\beta_0$ has no practical meaning since __Grade__ cannot be 0.
+
+$\beta_{female}$ is the additive coefficient that is added to $logit(p)$ if the student's gender is female; if the student is a male, this coefficient will be 0. 
+
+$\beta_{BirthPlace}$ is the additive coefficient that is added to $logit(p)$ if the student is born in $BirthPlace$. Because __PlaceofBirth__ is categorical, to fit the model, one country needs to be selected as the reference. In other words, with all other variables the same, $\beta_{BirthPlace}$ can also be interpreted as the difference in $logit(p)$ between the student born in $BirthPlace$ and the student born in the reference country. For this analysis, Kuwait will be selected as the reference country, so $\beta_{Kuwait}=0$.
+
+$\beta_{Grade}$ is a slope coefficient that represents the amount that is added to $logit(p)$ when the student's grade (__Grade__) increases by 1.
+
+As an instance, for a grade 6 male student born in Kuwait, the propensity score estimation for him will be:
+
+$$p = \frac{\exp(\beta_0 + 6\cdot\beta_{Grade})}{1+\exp(\beta_0 + 6\cdot\beta_{Grade})}$$
+
+and a grade 12 female student born in Egypt will have a propensity score of:
+
+$$p = \frac{\exp(\beta_0 + \beta_{Egypt} + \beta_{female} + 12\cdot\beta_{Grade})}{1+\exp(\beta_0 + \beta_{Egypt} + \beta_{female} + 12\cdot\beta_{Grade})}$$
+
+
+
+```{r}
+clean_data <- clean_data %>% mutate(treatment = ifelse(Relation=='Father', 0, 1))
+propensity <- glm(treatment ~ Grade + gender + PlaceofBirth, data=clean_data, family = binomial)
+logistic_summary <- summary(propensity)$coefficients %>% data.frame()
+```
+
+The estimates of the fitted model coefficients are shown in the Result section
+
+
+### ii. Propensity Score Matching
+
+Now with the propensity score model fitted, a one-to-one greedy propensity score matching without replacements will be performed. In other words, a treated student (called student A) in the dataset will be first randomly selected, and an untreated student with the propensity score that is closest to student A's propensity score will be matched with student A. Once the match is formed, these two students will no longer be available for the rest of the matching. If there are more than one closest untreated students, a random one will be selected. The process is repeated until a treated-untreated pair cannot be found __[3]__.
+
+Table 3 is a glimpse of the matched pairs. If two students have the same value in the __matched__ column, they are matched in a pair. It means that they will have similar baseline characteristics (i.e. similar propensity score) but one is treated (i.e. his/her mother is responsible for him/her) and the other is not.
+
+```{r}
+score <- predict.glm(propensity, clean_data, type = "response")
+clean_data <- clean_data %>% mutate(propensity=score)
+
+matches <- arm::matching(z=clean_data$treatment, score = clean_data$propensity)
+clean_data <- clean_data %>% mutate(matched = matches$pairs)
+matched_data <- clean_data %>% na.omit()
+
+pairs <- matched_data %>% select(gender, PlaceofBirth, Grade, Relation, propensity, matched)
+pairs <- pairs[order(pairs$matched),]
+
+
+head(pairs)  %>% kbl(booktabs = T, caption = 'Glimpse of Matched Pairs') %>% 
+  kable_styling(latex_options= c("striped", "hold_position"))
+```
+
+
+### iii. Outcome Comparison
+
+Afterward, cases that are not in any matching pairs will be removed from the dataset. Hence, the remaining data can be seen as the RCT experiment participants. Students whose mother is responsible for him/her are in the treatment group, while others belong to the control group.
+
+In this last step, a model with the outcome as the response variable will be fitted to evaluate whether the treatment is effective. In this paper, the model will include some reasonable explanatory variables along with the treatment variable (__Relation__) to explain the variation in the outcome variable (__Class__). With this model, one can obtain useful statistics to assess the effect of treatment on the outcome.
+
+Although the primary interest of this report is the parental involvement in school performance, the importance of the student's individual engagement should not be neglected. This aspect can be reflected by the student's behavior in the classroom, such as checking resources and announcements frequently, or active participation in group discussions. Therefore, in addition to the __Relation__ variable,  the model will include the number of raising hands (__raisedhands__), number of visiting class resources (__VisITedResources__), number of viewing announcement (__AnnouncementsView__), and number of participation in discussion groups (__Discussion__) as the explanatory variables.
+
+Since __Class__ has more than two possible values, a logistic model would not be appropriate. A linear model will be used in this part of the analysis.
+
+The linear model can also be expressed mathematically as:
+
+$$Class = \beta_0 + \beta_{RaiseHand}\cdot RaiseHand + \beta_{VisitResource}\cdot VisitResource +$$ $$\beta_{ViewAnnouncement}\cdot ViewAnnouncement + \beta_{Discussion}\cdot Discussion + \beta_{mother}\cdot \mathbb{I}\{mother\}$$
+
+$\beta_{0}$ represents the intercept term of the model that represents the predicted __Class__ variable value when all other variables are 0. 
+
+$\beta_{RaiseHand}, \beta_{VisitResource},\beta_{ViewAnnouncement},\beta_{Discussion}$ are the slope coefficient, which represent the predicted amount of increase in total mark level (__Class__) with one unit increment in hand raise, class resource visit, announcement view, and discussion participation, respectively.
+
+$\beta_{mother}$ indicates that, with all other variables being the same, the increase or decrease in mark level if the student's mother is responsible for him/her. The term $\beta_{mother}\cdot \mathbb{I}\{mother\}$ is 0 if the student's father is responsible for him/her.
+
+As an instance, if a student's mother is responsible, and he/she raised his/her hand 10 times, visited class resource 5 times, view announcement 12 times, and participate in discussion groups 2 times, this model will predict his/her mark level to be:
+
+$$Class = \beta_0 + 10\cdot\beta_{RaiseHand} + 5\cdot\beta_{VisitResource} + 12\cdot\beta_{ViewAnnouncement} + 2\cdot\beta_{AttendDiscussion}+ \beta_{mother}$$
+
+The primary interest of this report is the term $\beta_{mother}$. If this coefficient is statistically significant, the null hypothesis that __Relation__ has no effect on the student's total mark can be rejected. The estimates of model coefficients are shown in the Result section.
+
+```{r}
+propensity_score_regression <- lm(Class~raisedhands + AnnouncementsView
+                                    + VisITedResources + Discussion + Relation,data=matched_data)
+linear_summary <- summary(propensity_score_regression)$coefficients %>% data.frame()
+```
+
+
+
+# Result
+
+```{r, fig.width=10, fig.height=5}
+ggplot(matched_data, aes(x=gender, fill=Relation)) + 
+  geom_bar(position = 'dodge') + 
+  labs(x="Student's Gender", y="Number of Students", fill="Responsible Parent") +
+  ggtitle("Figure 1: Distribution of Student's Gender after Propensity Score Matching") +
+  theme(title=element_text(size = 12),
+        aspect.ratio = 1/2)
+```
+
+Figure 1 has shown the distribution of student's gender among the treatment and control groups after PSM. It seems that more male students are in the control group (__Relation__ variable equals 'Father').
+
+```{r, fig.width=10, fig.height=5}
+ggplot(matched_data, aes(x=PlaceofBirth, fill=Relation)) + 
+  geom_bar(position = 'dodge') + 
+  labs(x="Student's Place of Birth", y="Number of Students", fill="Responsible Parent") +
+  ggtitle("Figure 2: Distribution of Birth Place after Propensity Score Matching") + 
+  #scale_x_discrete(guide = guide_axis(n.dodge = 2))
+  theme(title=element_text(size = 12),
+        axis.text.x = element_text(angle = -45, hjust=0),
+        aspect.ratio = 1/2)
+```
+
+Figure 2 shows the distribution of __PlaceofBirth__ after PSM. More students from Kuwait are in the control group, while more students from Jordan are in the treatment group. For other countries, the distribution is roughly similar by briefly inspecting the graph.
+
+
+
+```{r, fig.width=10, fig.height=5}
+ggplot(matched_data, aes(x=as.factor(Grade), fill=Relation)) + 
+  geom_bar(position = 'dodge') + 
+  labs(x="Student's Grade", y="Number of Students", fill="Resonsible Parent") +
+  ggtitle("Figure 3: Distribution of Grade after Propensity Score Matching") +
+  theme(title=element_text(size = 12),
+        aspect.ratio = 1/2)
+```
+
+Figure 3 shows the distribution of __Grade__ after PSM. By visually inspecting the graph, the distributions of the two groups are somewhat different.
+
+
+
+```{r}
+betas <- c("beta_0", "beta_Grade","beta_female", "beta_Egypt", "beta_Iran", "beta_Iraq", "beta_Jordan", "beta_Lebanon", "beta_Lybia", "beta_Morocco", "beta_Palestine", "beta_SaudiArabia", "beta_Syria", "beta_Tunis", "beta_USA", "beta_Venezuela")
+row.names(logistic_summary) <- betas
+logistic_summary <- rename(logistic_summary, 'Standard Error'=Std..Error, 'z value'=z.value, 'p-value'=Pr...z..)
+logistic_summary %>% kbl(booktabs = T, caption = 'Logistic Model for Propensity Score Estimation') %>% 
+  kable_styling(latex_options= c("striped", "hold_position"))
+
+```
+
+Table 4 has shown the estimate of $\beta_0,\beta_{Grade},\beta_{female},$ and $\beta_{BirthPlace}$ for each place of birth. These are the coefficients of the logistic model that is used to estimate the propensity score in part i under the Model subsection. One noteworthy coefficient in this table is $\beta_{female}$. The estimate of $\beta_{female}$ is positive and the p-value of $\beta_{female}$ is 0.0004508, which is substantially smaller than 0.05. Both facts imply that a female student is more likely to have her mother as the responsible parent.
+
+
+```{r, fig.width=10, fig.height=7}
+predict_marks <- predict(propensity_score_regression, matched_data)
+matched_data <- matched_data %>% mutate(marks=predict_marks)
+ggplot(matched_data, aes(x=Relation, y=marks, color='red')) + geom_point() + 
+  geom_line(aes(group=matched), alpha=0.3) +
+  labs(x = 'Responsible Parents', y = "Predicted Mark Interval", color="Matching Pairs") +
+  ggtitle("Figure 4: Responsible Parents and Student's Predicted Mark Levels") +
+  theme(title=element_text(size = 12),
+        legend.position = 'none')
+```
+
+Figure 4 shows the different effects of father's and mother's involvement on the predicted marks of the student, produced by the fitted linear model in part iii under Model subsection. Two points are connected by the line if they are matched in a pair during the propensity score matching. By visually inspecting the graph, most students whose mother is the responsible parents seem to have higher predicted marks, which may imply that if a student's mother is responsible for him/her in school, he/she is predicted to have better academic performances.
+
+
+```{r}
+betas <- c("beta_0", "beta_RaiseHand","beta_VisitResource", "beta_ViewAnnouncement", "beta_AttendDiscussion", "beta_mother")
+row.names(linear_summary) <- betas
+linear_summary <- rename(linear_summary, 'Standard Error'=Std..Error, 't value'=t.value, 'p-value'=Pr...t..)
+linear_summary %>% kbl(booktabs = T, caption = 'Linear Model for Outcome') %>% 
+  kable_styling(latex_options= c("striped", "hold_position"))
+```
+
+Table 5 has shown the estimate of linear model coefficients $\beta_0,\beta_{RaiseHand}, \beta_{VisitResource},\\ \beta_{ViewAnnouncement},\beta_{AttendDiscussion},\beta_{mother}$ in part iii of the Model subsection.
+
+By Table 5, the estimate of $\beta_{mother}\approx 0.221$, and it has a p-value of 0.0000828. This is calculated from the linear model that is fitted to predict the __Class__ variable, which accounted for the number of raising hands (__raisedhands__), number of visiting class resources (__VisITedResources__), number of viewing announcement (__AnnouncementsView__), number of participation in discussion groups (__Discussion__), and which parent is responsible for the student (__Relation__).
+
+
+
+
+# Discussion
+
+## Summary
+
+The analysis makes use of the PSM technique to investigate the effect of the mother's involvement on the student's academic performance. First, a logistic model is fitted to estimate the propensity score of each student (details of the fitted model are described in Table 4). Then these estimations are used to match students in pairs so that control and treatment groups are formed. Lastly, a linear model is constructed to assess the effect of the mother's involvement (details of the fitted model are described in Table 5).
+
+
+## Conclusion
+
+Table 5 shows that a student whose mother is responsible for him/her is predicted to have a 0.22 higher total mark level (__Class__ variable) than a student whose father is responsible. The p-value of $\beta_{mother}$ is substantially smaller than 0.05, so the effect of the mother's involvement is statistically significant. Hence, there exists strong evidence that rejects the null hypothesis. In other words, the analysis has shown that the mother's involvement has a better effect on the student's academic performance than the father's involvement.
+
+## Weakness & Next Steps
+
+One potential flaw of the analysis is that a linear model may not be appropriate to fit the __Class__ variable. The mark interval represented by __Class__ is discrete and each level consists of different ranges of marks, so a linear model may not be valid. In the next steps, I could use diagnostic plots to check whether the linear model is appropriate. If it is not, I could try to apply other models that are commonly used to fit discrete variables, such as a multinomial logistic regression, in further analysis.
+
+Another drawback is that PSM does not give similar distributions among the two groups. As shown in Figure 1, 2, 3, the distribution of baseline characteristics is slightly different in treatment and control groups after PSM. This could imply that the data after matching does not approximate RCT well enough, which may lead to bias results. One possible reason for this weakness is that I use the one-to-one greedy propensity score matching in the analysis, which does not guarantee to yield optimal matches. Thus, in future improvements, I could try alternative PSM techniques, such as an optimal matching or match with replacements __[3]__, to see which one gives a more balanced matched data.
+
+Additionally, propensity score matching is not always an ideal approach to construct causal links. King and Nielsen have shown that propensity score matching might suffer from *PSM paradox*: as the propensity score matching reduces the imbalance of observational data, the inference becomes less useful __[6]__. One possible solution is, as suggested by King and Nielsen, to use other matching methods instead of PSM __[6]__. To further extend this analysis, I could evaluate whether the matching in this report is appropriate, and learn to apply other matching approaches to reduce the influence of *PSM paradox*.
+
+# References
+
+__[1]__ Amrieh, E. A., Hamtini, T., & Aljarah, I. (2016). *Mining Educational Data to Predict Student’s academic Performance using Ensemble Methods*. International Journal of Database Theory and Application, 9(8), 119-136.
+
+__[2]__ Amrieh, E. A., Hamtini, T., & Aljarah, I. (2015, November). *Preprocessing and analyzing educational data set using X-API for improving student's performance*. In Applied Electrical Engineering and Computing Technologies (AEECT), 2015 IEEE Jordan Conference on (pp. 1-5). IEEE.
+
+__[3]__ Austin P. C. (2011). *An Introduction to Propensity Score Methods for Reducing the Effects of Confounding in Observational Studies*. Multivariate behavioral research, 46(3), 399–424. https://doi.org/10.1080/00273171.2011.568786
+
+__[4]__ Rosenbaum P.R., Rubin D.B. (1983). *The central role of the propensity score in observational studies for causal effects*. Biometrika. 1983a;70:41–55.
+
+__[5]__ Chen, G. (2020, October). *Parental Involvement is Key to Student Success*. Public School Review. https://www.publicschoolreview.com/blog/parental-involvement-is-key-to-student-success
+
+__[6]__ King, G., Nielsen R. (2019). *Why Propensity Scores Should Not Be Used for Matching*. Political Analysis. 
+
